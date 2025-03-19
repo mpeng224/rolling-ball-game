@@ -9,7 +9,8 @@ class Game {
             running: false,
             score: 0,
             timer: 60, // Game duration in seconds
-            gameOver: false
+            gameOver: false,
+            playerDied: false
         };
         
         // Initialize game
@@ -141,11 +142,96 @@ class Game {
         this.ballBody.position.set(0, radius, 0);
         this.world.addBody(this.ballBody);
         
-        // Add a contact event listener for collision sounds
+        // Add a contact event listener for collision sounds and death detection
         this.ballBody.addEventListener('collide', (e) => {
-            // Could play a sound here
-            // this.playCollisionSound(e.contact.getImpactVelocityAlongNormal());
+            // Get the body that the ball collided with
+            const collidedBody = e.body;
+            
+            // Check if it's a wall or obstacle (not the ground)
+            if (collidedBody !== this.level.groundBody) {
+                // Check if it's a non-collectible (walls or obstacles)
+                const isCollectible = this.level.collectibles.some(c => c.body === collidedBody);
+                
+                if (!isCollectible) {
+                    // Player hit a wall or obstacle
+                    this.playerDie();
+                }
+            }
         });
+    }
+    
+    playerDie() {
+        if (this.state.playerDied || !this.state.running) return; // Prevent multiple deaths
+        
+        this.state.playerDied = true;
+        
+        // Visual effect for death - turn the ball red
+        const originalColor = this.ballMesh.material.color.clone();
+        this.ballMesh.material.color.set(0xff0000); // Red
+        this.ballMesh.material.emissive.set(0xff0000); // Glowing red
+        
+        // Explosion effect
+        this.createExplosionEffect(this.ballMesh.position);
+        
+        // Wait a moment then end the game
+        setTimeout(() => {
+            // Reset ball color (in case we restart)
+            this.ballMesh.material.color.copy(originalColor);
+            this.ballMesh.material.emissive.set(0x000000);
+            
+            // End the game
+            this.endGame("You crashed!");
+        }, 1000);
+    }
+    
+    createExplosionEffect(position) {
+        // Create explosion particles
+        const particleCount = 50;
+        const particleGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+        const particleMaterial = new THREE.MeshBasicMaterial({ color: 0xff5500 });
+        
+        this.explosionParticles = [];
+        
+        for (let i = 0; i < particleCount; i++) {
+            const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+            particle.position.copy(position);
+            
+            // Random velocity
+            particle.velocity = new THREE.Vector3(
+                (Math.random() - 0.5) * 10,
+                (Math.random() - 0.5) * 10,
+                (Math.random() - 0.5) * 10
+            );
+            
+            this.scene.add(particle);
+            this.explosionParticles.push(particle);
+        }
+    }
+    
+    updateExplosion(deltaTime) {
+        if (!this.explosionParticles) return;
+        
+        for (let i = 0; i < this.explosionParticles.length; i++) {
+            const particle = this.explosionParticles[i];
+            
+            // Update position based on velocity
+            particle.position.x += particle.velocity.x * deltaTime;
+            particle.position.y += particle.velocity.y * deltaTime;
+            particle.position.z += particle.velocity.z * deltaTime;
+            
+            // Add gravity
+            particle.velocity.y -= 9.8 * deltaTime;
+            
+            // Fade out particles
+            particle.scale.multiplyScalar(0.95);
+            
+            // Remove tiny particles
+            if (particle.scale.x < 0.01) {
+                this.scene.remove(particle);
+                this.explosionParticles.splice(i, 1);
+                i--;
+            }
+        }
     }
     
     resetPlayer() {
@@ -177,6 +263,7 @@ class Game {
         this.state.score = 0;
         this.state.timer = 60;
         this.state.gameOver = false;
+        this.state.playerDied = false;
         
         // Reset player position
         this.resetPlayer();
@@ -197,12 +284,29 @@ class Game {
         this.startGame();
     }
     
-    endGame() {
+    endGame(reason) {
         this.state.running = false;
         this.state.gameOver = true;
         
         // Show game over screen
         showElement('game-over');
+        
+        // Show reason for game over if provided
+        if (reason) {
+            document.getElementById('game-over-reason').textContent = reason;
+        } else {
+            // Default messages based on state
+            if (this.state.playerDied) {
+                document.getElementById('game-over-reason').textContent = "You crashed!";
+            } else if (this.state.timer <= 0) {
+                document.getElementById('game-over-reason').textContent = "Time's up!";
+            } else if (this.level.getRemainingCollectibles() === 0) {
+                document.getElementById('game-over-reason').textContent = "You win! All collectibles gathered!";
+            } else {
+                document.getElementById('game-over-reason').textContent = "Game Over!";
+            }
+        }
+        
         document.getElementById('final-score').textContent = this.state.score;
     }
     
@@ -215,13 +319,14 @@ class Game {
         
         // Check game over conditions
         if (this.state.timer <= 0) {
-            this.endGame();
+            this.endGame("Time's up!");
             return;
         }
         
         // Check if ball fell off the board
         if (this.ballBody.position.y < -5) {
-            this.resetPlayer();
+            this.endGame("You fell off the board!");
+            return;
         }
         
         // Check collectibles
@@ -237,8 +342,12 @@ class Game {
         
         // Check if all collectibles are collected
         if (this.level.getRemainingCollectibles() === 0) {
-            this.endGame(); // Win the game
+            this.endGame("You win! All collectibles gathered!");
+            return;
         }
+        
+        // Update explosion effect if active
+        this.updateExplosion(deltaTime);
     }
     
     updatePhysics(deltaTime) {

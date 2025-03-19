@@ -77,4 +77,11 @@ button:hover {
 
 .hidden {
     display: none;
+}
+
+#game-over-reason {
+    font-size: 18px;
+    font-weight: bold;
+    color: #ff4444;
+    margin-bottom: 15px;
 } 
