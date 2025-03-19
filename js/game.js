@@ -143,7 +143,18 @@ class Game {
         this.world.addBody(this.ballBody);
         
         // Add a contact event listener for collision sounds and death detection
+        // Add a flag to enable collision detection only after a short delay
+        this.collisionDetectionEnabled = false;
+        
+        // Enable collision detection after a short delay
+        setTimeout(() => {
+            this.collisionDetectionEnabled = true;
+        }, 500); // 500ms delay
+        
         this.ballBody.addEventListener('collide', (e) => {
+            // Skip collision detection if not enabled yet
+            if (!this.collisionDetectionEnabled) return;
+            
             // Get the body that the ball collided with
             const collidedBody = e.body;
             
@@ -170,6 +181,18 @@ class Game {
         this.ballMesh.material.color.set(0xff0000); // Red
         this.ballMesh.material.emissive.set(0xff0000); // Glowing red
         
+        // Create a dramatic camera shake effect
+        this.shakeDuration = 1.0; // seconds
+        this.shakeIntensity = 1.0;
+        this.originalCameraPos = this.camera.position.clone();
+        
+        // Apply impulse to the ball (bounce effect)
+        const upVector = new CANNON.Vec3(0, 5, 0);
+        this.ballBody.applyImpulse(upVector, this.ballBody.position);
+        
+        // Create a shockwave ripple on the ground
+        this.createGroundRipple(this.ballMesh.position);
+        
         // Explosion effect
         this.createExplosionEffect(this.ballMesh.position);
         
@@ -181,36 +204,154 @@ class Game {
             
             // End the game
             this.endGame("You crashed!");
-        }, 1000);
+        }, 1500); // Longer delay for better effect
     }
     
     createExplosionEffect(position) {
         // Create explosion particles
-        const particleCount = 50;
-        const particleGeometry = new THREE.SphereGeometry(0.05, 8, 8);
-        const particleMaterial = new THREE.MeshBasicMaterial({ color: 0xff5500 });
+        const particleCount = 100; // More particles for better effect
+        const particleGeometry = new THREE.SphereGeometry(0.08, 8, 8); // Larger particles
+        const particleMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff3300,
+            emissive: 0xff0000,
+            emissiveIntensity: 1.0
+        });
         
         this.explosionParticles = [];
+        
+        // Add some light to enhance the explosion effect
+        const explosionLight = new THREE.PointLight(0xff5500, 3, 10);
+        explosionLight.position.copy(position);
+        this.scene.add(explosionLight);
+        this.explosionLight = explosionLight;
         
         for (let i = 0; i < particleCount; i++) {
             const particle = new THREE.Mesh(particleGeometry, particleMaterial);
             particle.position.copy(position);
             
-            // Random velocity
-            particle.velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * 10,
-                (Math.random() - 0.5) * 10,
-                (Math.random() - 0.5) * 10
+            // Random velocity - faster movement
+            const speed = 5 + Math.random() * 10;
+            const direction = new THREE.Vector3(
+                (Math.random() - 0.5) * 2,
+                (Math.random() - 0.5) * 2,
+                (Math.random() - 0.5) * 2
+            ).normalize();
+            
+            particle.velocity = direction.multiplyScalar(speed);
+            
+            // Random size
+            const scale = 0.5 + Math.random() * 1.5;
+            particle.scale.set(scale, scale, scale);
+            
+            // Random rotation and spin
+            particle.rotation.set(
+                Math.random() * Math.PI * 2,
+                Math.random() * Math.PI * 2,
+                Math.random() * Math.PI * 2
             );
             
+            particle.rotationSpeed = {
+                x: (Math.random() - 0.5) * 2,
+                y: (Math.random() - 0.5) * 2,
+                z: (Math.random() - 0.5) * 2
+            };
+            
+            // Add to scene and array
             this.scene.add(particle);
             this.explosionParticles.push(particle);
+        }
+        
+        // Create a shockwave ring
+        const ringGeometry = new THREE.RingGeometry(0.2, 0.4, 32);
+        const ringMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff8800, 
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 1.0
+        });
+        
+        this.explosionRing = new THREE.Mesh(ringGeometry, ringMaterial);
+        this.explosionRing.position.copy(position);
+        this.explosionRing.rotation.x = Math.PI / 2; // Flat ring
+        this.explosionRing.scale.set(1, 1, 1);
+        this.scene.add(this.explosionRing);
+        
+        // Sound effect for explosion (if you want to add it later)
+        // this.playExplosionSound();
+    }
+    
+    createGroundRipple(position) {
+        // Create ripple effect on the ground
+        const rippleCount = 3;
+        this.ripples = [];
+        
+        for (let i = 0; i < rippleCount; i++) {
+            const size = 0.5 + i * 1.0; // Increasing sizes
+            const ringGeo = new THREE.RingGeometry(size, size + 0.2, 32);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xffaa00,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.7
+            });
+            
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.set(position.x, 0.01, position.z); // Just above ground
+            ring.rotation.x = Math.PI / 2; // Flat on ground
+            ring.scale.set(0.1, 0.1, 0.1); // Start small
+            ring.expansionRate = 5.0 + i * 2; // Different expansion rates
+            ring.delay = i * 0.2; // Staggered start
+            ring.delayTimer = ring.delay;
+            
+            this.scene.add(ring);
+            this.ripples.push(ring);
+        }
+    }
+    
+    updateRipples(deltaTime) {
+        if (!this.ripples) return;
+        
+        let allDone = true;
+        
+        for (let i = 0; i < this.ripples.length; i++) {
+            const ring = this.ripples[i];
+            
+            // Handle delay
+            if (ring.delayTimer > 0) {
+                ring.delayTimer -= deltaTime;
+                allDone = false;
+                continue;
+            }
+            
+            // Expand the ring
+            ring.scale.x += ring.expansionRate * deltaTime;
+            ring.scale.y += ring.expansionRate * deltaTime;
+            ring.scale.z += ring.expansionRate * deltaTime;
+            
+            // Fade out
+            if (ring.material.opacity > 0) {
+                ring.material.opacity -= 1.5 * deltaTime;
+                allDone = false;
+            }
+            
+            // Remove faded rings
+            if (ring.material.opacity <= 0) {
+                this.scene.remove(ring);
+                this.ripples.splice(i, 1);
+                i--;
+            }
+        }
+        
+        // Clean up when all rings are gone
+        if (allDone && this.ripples.length === 0) {
+            this.ripples = null;
         }
     }
     
     updateExplosion(deltaTime) {
         if (!this.explosionParticles) return;
         
+        // Update particles
         for (let i = 0; i < this.explosionParticles.length; i++) {
             const particle = this.explosionParticles[i];
             
@@ -219,24 +360,69 @@ class Game {
             particle.position.y += particle.velocity.y * deltaTime;
             particle.position.z += particle.velocity.z * deltaTime;
             
-            // Add gravity
+            // Apply rotation based on rotation speed
+            particle.rotation.x += particle.rotationSpeed.x * deltaTime;
+            particle.rotation.y += particle.rotationSpeed.y * deltaTime;
+            particle.rotation.z += particle.rotationSpeed.z * deltaTime;
+            
+            // Add gravity and drag
             particle.velocity.y -= 9.8 * deltaTime;
+            particle.velocity.multiplyScalar(0.95); // Air resistance
             
             // Fade out particles
-            particle.scale.multiplyScalar(0.95);
+            if (particle.material.opacity > 0) {
+                particle.material.opacity -= 1.0 * deltaTime;
+            }
             
-            // Remove tiny particles
-            if (particle.scale.x < 0.01) {
+            // Remove tiny or faded particles
+            if (particle.scale.x < 0.01 || particle.material.opacity <= 0) {
                 this.scene.remove(particle);
                 this.explosionParticles.splice(i, 1);
                 i--;
             }
         }
+        
+        // Update explosion ring
+        if (this.explosionRing) {
+            // Expand the ring
+            this.explosionRing.scale.x += 8 * deltaTime;
+            this.explosionRing.scale.y += 8 * deltaTime;
+            this.explosionRing.scale.z += 8 * deltaTime;
+            
+            // Fade out the ring
+            if (this.explosionRing.material.opacity > 0) {
+                this.explosionRing.material.opacity -= 2.0 * deltaTime;
+            }
+            
+            // Remove the ring when it's faded out
+            if (this.explosionRing.material.opacity <= 0) {
+                this.scene.remove(this.explosionRing);
+                this.explosionRing = null;
+            }
+        }
+        
+        // Update explosion light
+        if (this.explosionLight) {
+            // Reduce intensity over time
+            this.explosionLight.intensity -= 5 * deltaTime;
+            
+            // Remove light when it's faded
+            if (this.explosionLight.intensity <= 0) {
+                this.scene.remove(this.explosionLight);
+                this.explosionLight = null;
+            }
+        }
+        
+        // Clean up when all explosion elements are done
+        if (this.explosionParticles.length === 0 && !this.explosionRing && !this.explosionLight) {
+            this.explosionParticles = null;
+        }
     }
     
     resetPlayer() {
-        // Reset ball position
-        this.ballBody.position.set(0, 0.5, 0);
+        // Reset ball position - increase the Y value to ensure it starts above obstacles
+        const ballRadius = 0.5; // Match the radius defined in createPlayer
+        this.ballBody.position.set(0, ballRadius * 3, 0); // Position it higher off the ground
         this.ballBody.velocity.set(0, 0, 0);
         this.ballBody.angularVelocity.set(0, 0, 0);
         syncBodyToMesh(this.ballBody, this.ballMesh);
@@ -264,6 +450,12 @@ class Game {
         this.state.timer = 60;
         this.state.gameOver = false;
         this.state.playerDied = false;
+        
+        // Reset collision detection
+        this.collisionDetectionEnabled = false;
+        setTimeout(() => {
+            this.collisionDetectionEnabled = true;
+        }, 500); // 500ms delay before enabling collision detection
         
         // Reset player position
         this.resetPlayer();
@@ -346,8 +538,10 @@ class Game {
             return;
         }
         
-        // Update explosion effect if active
+        // Update visual effects
         this.updateExplosion(deltaTime);
+        this.updateRipples(deltaTime);
+        this.updateCameraShake(deltaTime);
     }
     
     updatePhysics(deltaTime) {
@@ -447,6 +641,36 @@ class Game {
         
         // Update renderer size
         this.renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    
+    updateCameraShake(deltaTime) {
+        if (this.shakeDuration > 0) {
+            // Reduce shake duration
+            this.shakeDuration -= deltaTime;
+            
+            // Apply shake
+            const intensity = this.shakeIntensity * (this.shakeDuration > 0 ? this.shakeDuration : 0);
+            const shakeX = (Math.random() - 0.5) * 2 * intensity;
+            const shakeY = (Math.random() - 0.5) * 2 * intensity;
+            const shakeZ = (Math.random() - 0.5) * 2 * intensity;
+            
+            if (this.originalCameraPos) {
+                this.camera.position.set(
+                    this.originalCameraPos.x + shakeX,
+                    this.originalCameraPos.y + shakeY,
+                    this.originalCameraPos.z + shakeZ
+                );
+            }
+            
+            // Reset camera when done
+            if (this.shakeDuration <= 0) {
+                this.shakeDuration = 0;
+                if (this.originalCameraPos) {
+                    this.camera.position.copy(this.originalCameraPos);
+                    this.originalCameraPos = null;
+                }
+            }
+        }
     }
 }
 
