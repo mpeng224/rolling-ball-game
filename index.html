@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Rolling Ball Game</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // Prevent context menu on right-click (used for camera control)
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
+    </script>
+</head>
+<body>
+    <div id="game-container">
+        <div id="score">Score: <span id="score-value">0</span></div>
+        <div id="timer">Time: <span id="timer-value">60</span></div>
+        <div id="instructions">
+            <h2>Rolling Ball Game</h2>
+            <p><strong>Ball Controls:</strong></p>
+            <p>Desktop: Use arrow keys or WASD to control the ball</p>
+            <p>Mobile: Tilt your device to control the ball</p>
+            <p><em>Controls automatically adjust to match your camera view!</em></p>
+            <p><strong>Camera Controls:</strong></p>
+            <p>Desktop: Right-click + drag to rotate view, scroll wheel to zoom</p>
+            <p>Mobile: Two-finger drag to rotate view</p>
+            <button id="start-button">Start Game</button>
+        </div>
+        <div id="game-over" class="hidden">
+            <h2>Game Over!</h2>
+            <p>Your final score: <span id="final-score">0</span></p>
+            <button id="restart-button">Play Again</button>
+        </div>
+    </div>
+
+    <!-- Load libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    
+    <!-- Game scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/controls.js"></script>
+    <script src="js/level.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html> 

@@ -1,0 +1,57 @@
+# System files
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Dependency directories
+node_modules/
+jspm_packages/
+bower_components/
+
+# Distribution directories
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs
+*.log
+
+# IDE and editor files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Cache
+.eslintcache
+.cache/
+.parcel-cache/
+.npm
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity 
